@@ -4,14 +4,14 @@ use chrono::NaiveDate;
 use eframe::egui;
 use eframe::egui::text::LayoutJob;
 use eframe::egui::{
-    Align2, Button, Color32, CornerRadius, FontFamily, FontId, Frame, Margin, Pos2,
-    Rect, RichText, ScrollArea, Sense, Stroke, TextEdit, TextFormat, Vec2,
+    Align2, Button, Color32, CornerRadius, FontFamily, FontId, Frame, Margin, Pos2, Rect, RichText,
+    ScrollArea, Sense, Stroke, TextEdit, TextFormat, Vec2,
 };
 
-use crate::model::{
-    day_span, fmt_span, period_bounds, Bucket, Period, Provider, Snapshot, RATE_LABEL,
-};
 use crate::WattApp;
+use crate::model::{
+    Bucket, Period, Provider, RATE_LABEL, Snapshot, day_span, fmt_span, period_bounds,
+};
 
 pub const BG: Color32 = Color32::from_rgb(0, 0, 0);
 pub const TEXT: Color32 = Color32::from_rgb(244, 244, 242);
@@ -106,8 +106,7 @@ impl WattApp {
             let pos = Pos2::new(rect.left(), rect.center().y - galley.size().y * 0.5);
             painter.galley(pos, galley, TEXT);
             if resp.drag_started() {
-                ui.ctx()
-                    .send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
             }
             resp.on_hover_cursor(egui::CursorIcon::Grab);
 
@@ -145,11 +144,7 @@ impl WattApp {
         }
         let today = chrono::Local::now().date_naive();
         let (start, end) = period_bounds(self.period, today, self.custom_start, self.custom_end);
-        ui.label(
-            RichText::new(fmt_span(start, end))
-                .size(12.0)
-                .color(MUTED),
-        );
+        ui.label(RichText::new(fmt_span(start, end)).size(12.0).color(MUTED));
         if changed {
             self.persist();
         }
@@ -194,7 +189,8 @@ impl WattApp {
                 .size(11.0)
                 .color(MUTED),
         );
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 2.0), Sense::hover());
+        let (rect, _) =
+            ui.allocate_exact_size(Vec2::new(ui.available_width(), 2.0), Sense::hover());
         let painter = ui.painter();
         painter.rect_filled(rect, CornerRadius::ZERO, LINE);
         let w = rect.width() * (done as f32 / total as f32).clamp(0.0, 1.0);
@@ -269,9 +265,7 @@ impl WattApp {
             hairline(ui);
             ui.add_space(2.0);
             let open = self.expanded == Some(row.provider);
-            let tokens = if row.provider == Provider::Agy {
-                "—".to_string()
-            } else if row.tokens == 0 {
+            let tokens = if row.provider == Provider::Agy || row.tokens == 0 {
                 "—".to_string()
             } else {
                 fmt_tokens_short(row.tokens)
@@ -422,7 +416,8 @@ pub fn period_view(
         add_model(row, bucket);
     }
     for row in &mut rows {
-        row.models.sort_by(|a, b| b.micros.cmp(&a.micros).then(b.tokens.cmp(&a.tokens)));
+        row.models
+            .sort_by(|a, b| b.micros.cmp(&a.micros).then(b.tokens.cmp(&a.tokens)));
     }
     let tokens = rows.iter().map(|r| r.tokens).sum();
     let micros: u64 = rows.iter().map(|r| r.micros).sum();
@@ -507,7 +502,8 @@ fn text_button(ui: &mut egui::Ui, label: &str) -> bool {
 
 fn section_toggle(ui: &mut egui::Ui, label: &str, open: bool) -> bool {
     let mark = if open { "–" } else { "+" };
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 22.0), Sense::click());
+    let (rect, resp) =
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), 22.0), Sense::click());
     let painter = ui.painter();
     let font = FontId::new(11.0, FontFamily::Proportional);
     let job = LayoutJob::single_section(
@@ -525,13 +521,7 @@ fn section_toggle(ui: &mut egui::Ui, label: &str, open: bool) -> bool {
         galley,
         MUTED,
     );
-    painter.text(
-        rect.right_center(),
-        Align2::RIGHT_CENTER,
-        mark,
-        font,
-        MUTED,
-    );
+    painter.text(rect.right_center(), Align2::RIGHT_CENTER, mark, font, MUTED);
     if resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -549,13 +539,12 @@ fn provider_line(ui: &mut egui::Ui, name: &str, tokens: &str, money: &str, sub: 
     let y = rect.center().y;
     let left = rect.left() + if sub { 12.0 } else { 0.0 };
     let name_right = rect.right() - 96.0 - tok_g.size().x - 12.0;
-    painter.with_clip_rect(Rect::from_min_max(rect.min, Pos2::new(name_right, rect.bottom()))).text(
-        Pos2::new(left, y),
-        Align2::LEFT_CENTER,
-        name,
-        font,
-        TEXT,
-    );
+    painter
+        .with_clip_rect(Rect::from_min_max(
+            rect.min,
+            Pos2::new(name_right, rect.bottom()),
+        ))
+        .text(Pos2::new(left, y), Align2::LEFT_CENTER, name, font, TEXT);
     painter.galley(
         Pos2::new(rect.right() - money_g.size().x, y - money_g.size().y * 0.5),
         money_g,
@@ -580,9 +569,7 @@ fn model_line(ui: &mut egui::Ui, name: &str, tokens: &str, money: &str) {
 }
 
 fn note_line(ui: &mut egui::Ui, text: &str) {
-    ui.add(
-        egui::Label::new(RichText::new(text).size(11.0).color(MUTED)).wrap(),
-    );
+    ui.add(egui::Label::new(RichText::new(text).size(11.0).color(MUTED)).wrap());
     ui.add_space(1.0);
 }
 
@@ -662,11 +649,7 @@ pub fn fmt_money(usd: f64) -> String {
     let text = format!("{:.2}", usd.abs());
     let (int, frac) = text.split_once('.').unwrap_or((text.as_str(), "00"));
     let body = format!("{},{frac} $", group_int(int));
-    if neg {
-        format!("−{body}")
-    } else {
-        body
-    }
+    if neg { format!("−{body}") } else { body }
 }
 
 fn fmt_ratio(ratio: f64) -> String {
@@ -685,7 +668,7 @@ fn group_int(int: &str) -> String {
     let chars: Vec<char> = int.chars().collect();
     let mut out = String::new();
     for (i, c) in chars.iter().enumerate() {
-        if i > 0 && (chars.len() - i) % 3 == 0 {
+        if i > 0 && (chars.len() - i).is_multiple_of(3) {
             out.push('\u{202f}');
         }
         out.push(*c);

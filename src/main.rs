@@ -17,9 +17,9 @@ use serde::{Deserialize, Serialize};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
-use crate::model::{month_start, Period, Provider, Snapshot};
-use crate::scan::{data_dir, Shared};
-use crate::ui::{period_view, tooltip_line, BG, STROKE, TEXT};
+use crate::model::{Period, Provider, Snapshot, month_start};
+use crate::scan::{Shared, data_dir};
+use crate::ui::{BG, STROKE, TEXT, period_view, tooltip_line};
 
 const WIN_W: f32 = 400.0;
 const WIN_H: f32 = 680.0;
@@ -177,7 +177,7 @@ impl WattApp {
         }
         let max_h = (area.height() - 16.0).max(420.0);
         if size.y > max_h || size.y < 200.0 {
-            size.y = max_h.min(WIN_H).max(420.0);
+            size.y = max_h.clamp(420.0, WIN_H);
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
         }
         let (mut x, mut y) = match self.icon_rect.filter(rect_usable) {
@@ -194,10 +194,7 @@ impl WattApp {
                 };
                 (x, y)
             }
-            None => (
-                area.right() - size.x - 12.0,
-                area.bottom() - size.y - 12.0,
-            ),
+            None => (area.right() - size.x - 12.0, area.bottom() - size.y - 12.0),
         };
         x = x.clamp(
             area.left() + 4.0,
@@ -327,30 +324,38 @@ impl eframe::App for WattApp {
 fn spawn_scan(shared: Arc<Shared>, wake: Arc<Wake>, ctx: egui::Context) {
     std::thread::Builder::new()
         .name("watt-scan".into())
-        .spawn(move || loop {
-            shared.scanning.store(true, Ordering::Relaxed);
-            ctx.request_repaint();
-            log_line("lecture démarrée");
-            let job = Arc::clone(&shared);
-            let result = std::panic::catch_unwind(AssertUnwindSafe(move || {
-                scan::run_scan(&job);
-            }));
-            if let Err(payload) = result {
-                log_line(&format!("scan: {}", panic_message(payload.as_ref())));
-            } else {
-                log_line("lecture terminée");
+        .spawn(move || {
+            loop {
+                shared.scanning.store(true, Ordering::Relaxed);
+                ctx.request_repaint();
+                log_line("lecture démarrée");
+                let job = Arc::clone(&shared);
+                let result = std::panic::catch_unwind(AssertUnwindSafe(move || {
+                    scan::run_scan(&job);
+                }));
+                if let Err(payload) = result {
+                    log_line(&format!("scan: {}", panic_message(payload.as_ref())));
+                } else {
+                    let summary = shared.snapshot.lock().map(|snap| {
+                        format!(
+                            "lecture terminée · {} fichiers · {} appels",
+                            snap.files, snap.calls
+                        )
+                    });
+                    log_line(&summary.unwrap_or_else(|_| "lecture terminée".to_string()));
+                }
+                shared.scanning.store(false, Ordering::Relaxed);
+                ctx.request_repaint();
+                let guard = wake.pending.lock().unwrap_or_else(|err| err.into_inner());
+                let waited =
+                    wake.cvar
+                        .wait_timeout_while(guard, Duration::from_secs(60), |pending| !*pending);
+                let mut guard = match waited {
+                    Ok((guard, _)) => guard,
+                    Err(err) => err.into_inner().0,
+                };
+                *guard = false;
             }
-            shared.scanning.store(false, Ordering::Relaxed);
-            ctx.request_repaint();
-            let guard = wake.pending.lock().unwrap_or_else(|err| err.into_inner());
-            let waited = wake.cvar.wait_timeout_while(guard, Duration::from_secs(60), |pending| {
-                !*pending
-            });
-            let mut guard = match waited {
-                Ok((guard, _)) => guard,
-                Err(err) => err.into_inner().0,
-            };
-            *guard = false;
         })
         .ok();
 }
@@ -544,20 +549,17 @@ fn disk(px: &mut [u8], size: u32, cx: f32, cy: f32, rad: f32) {
 }
 
 fn rect_usable(rect: &tray_icon::Rect) -> bool {
-    rect.size.width > 0 && rect.size.height > 0 && (rect.position.x != 0.0 || rect.position.y != 0.0)
+    rect.size.width > 0
+        && rect.size.height > 0
+        && (rect.position.x != 0.0 || rect.position.y != 0.0)
 }
 
 fn work_area(ppp: f32) -> egui::Rect {
     use windows_sys::Win32::Foundation::RECT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETWORKAREA};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SPI_GETWORKAREA, SystemParametersInfoW};
     let mut rect = RECT::default();
     unsafe {
-        SystemParametersInfoW(
-            SPI_GETWORKAREA,
-            0,
-            &mut rect as *mut RECT as *mut _,
-            0,
-        );
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &mut rect as *mut RECT as *mut _, 0);
     }
     let s = ppp.max(1.0);
     if rect.right <= rect.left || rect.bottom <= rect.top {
@@ -570,8 +572,8 @@ fn work_area(ppp: f32) -> egui::Rect {
 }
 
 fn claim_instance() -> bool {
-    use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::Foundation::ERROR_ALREADY_EXISTS;
+    use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::System::Threading::CreateMutexW;
     let name = wide("Local\\Watt");
     unsafe {
@@ -588,9 +590,7 @@ fn claim_instance() -> bool {
 }
 
 fn message_box(title: &str, text: &str) {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        MessageBoxW, MB_ICONINFORMATION, MB_OK,
-    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONINFORMATION, MB_OK, MessageBoxW};
     let title = wide(title);
     let text = wide(text);
     unsafe {
@@ -611,7 +611,11 @@ fn log_line(text: &str) {
     use std::io::Write;
     let path = data_dir().join("watt.log");
     let line = format!("{} {text}\n", Local::now().format("%Y-%m-%d %H:%M:%S"));
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = file.write_all(line.as_bytes());
     }
 }
@@ -641,10 +645,10 @@ struct Config {
 impl Config {
     fn load() -> Self {
         let path = data_dir().join("config.json");
-        if let Ok(text) = std::fs::read_to_string(path) {
-            if let Ok(cfg) = serde_json::from_str::<Config>(&text) {
-                return cfg;
-            }
+        if let Ok(text) = std::fs::read_to_string(path)
+            && let Ok(cfg) = serde_json::from_str::<Config>(&text)
+        {
+            return cfg;
         }
         let today = Local::now().date_naive();
         let start = month_start(today);

@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::model::{Bucket, Parts, Provider, Snapshot, RATE_REV};
+use crate::model::{Bucket, Parts, Provider, RATE_REV, Snapshot};
 use crate::price::{price_usd, usd_to_micros};
 
 pub struct Shared {
@@ -34,7 +34,7 @@ impl Shared {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct FileEntry {
     len: u64,
     mtime: i64,
@@ -43,20 +43,6 @@ struct FileEntry {
     buckets: Vec<Bucket>,
     seen: Vec<u64>,
     calls: u64,
-}
-
-impl Default for FileEntry {
-    fn default() -> Self {
-        Self {
-            len: 0,
-            mtime: 0,
-            parsed_to: 0,
-            model: None,
-            buckets: Vec::new(),
-            seen: Vec::new(),
-            calls: 0,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -81,7 +67,11 @@ fn scan_log(text: &str) {
     use std::io::Write;
     let path = data_dir().join("watt.log");
     let line = format!("{} {text}\n", Local::now().format("%Y-%m-%d %H:%M:%S"));
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = file.write_all(line.as_bytes());
         let _ = file.flush();
     }
@@ -106,7 +96,9 @@ pub fn run_scan(shared: &Shared) {
     let cache_path = data_dir().join("cache.json");
     let mut cache = load_cache(&cache_path);
     let sources = discover();
-    shared.progress_total.store(sources.len() as u32, Ordering::Relaxed);
+    shared
+        .progress_total
+        .store(sources.len() as u32, Ordering::Relaxed);
     shared.progress_done.store(0, Ordering::Relaxed);
 
     let mut ready: Vec<(String, FileEntry)> = Vec::new();
@@ -128,17 +120,14 @@ pub fn run_scan(shared: &Shared) {
     publish(shared, &ready);
 
     let done = &shared.progress_done;
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(4)
-        .build()
-        .ok();
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(4).build().ok();
     let parse_pending = || {
         pending
             .par_iter()
             .map(|(source, plan, prev)| {
                 let entry = parse_source(source, plan, prev);
                 let n = done.fetch_add(1, Ordering::Relaxed);
-                if n % 250 == 0 {
+                if n.is_multiple_of(250) {
                     scan_log(&format!("progression {n}"));
                 }
                 (source.path.to_string_lossy().to_string(), entry)
@@ -167,7 +156,11 @@ fn plan_for(provider: Provider, prev: &FileEntry, len: u64, mtime: i64) -> Plan 
         if fresh {
             Plan::Fresh
         } else {
-            let start = if len < prev.parsed_to { 0 } else { prev.parsed_to.min(len) };
+            let start = if len < prev.parsed_to {
+                0
+            } else {
+                prev.parsed_to.min(len)
+            };
             Plan::Accumulate { start }
         }
     } else if provider == Provider::Cursor {
@@ -175,7 +168,9 @@ fn plan_for(provider: Provider, prev: &FileEntry, len: u64, mtime: i64) -> Plan 
     } else if fresh {
         Plan::Fresh
     } else if prev.parsed_to > 0 && len >= prev.parsed_to && len >= prev.len {
-        Plan::Append { start: prev.parsed_to }
+        Plan::Append {
+            start: prev.parsed_to,
+        }
     } else {
         Plan::Replace
     }
@@ -203,17 +198,8 @@ fn snapshot_of(files: &BTreeMap<String, FileEntry>) -> Snapshot {
         buckets.extend(entry.buckets.iter().cloned());
         calls += entry.calls;
     }
-    let mut warnings = Vec::new();
-    if home_dir().join(".gemini").join("antigravity-cli").exists()
-        || home_dir().join(".gemini").join("antigravity").exists()
-    {
-        warnings.push(
-            "AGY : Antigravity ne publie pas les jetons. La ligne reste à zéro.".to_string(),
-        );
-    }
     Snapshot {
         buckets,
-        warnings,
         files: files.len(),
         calls,
     }
@@ -225,15 +211,24 @@ fn discover() -> Vec<Source> {
     let mut jsonl = Vec::new();
     walk_jsonl(&home.join(".claude").join("projects"), &mut jsonl);
     for path in jsonl.drain(..) {
-        out.push(Source { path, provider: Provider::Claude });
+        out.push(Source {
+            path,
+            provider: Provider::Claude,
+        });
     }
     walk_jsonl(&home.join(".codex").join("sessions"), &mut jsonl);
     for path in jsonl.drain(..) {
-        out.push(Source { path, provider: Provider::Codex });
+        out.push(Source {
+            path,
+            provider: Provider::Codex,
+        });
     }
     walk_jsonl(&home.join(".grok").join("logs"), &mut jsonl);
     for path in jsonl.drain(..) {
-        out.push(Source { path, provider: Provider::Grok });
+        out.push(Source {
+            path,
+            provider: Provider::Grok,
+        });
     }
     let cursor = home
         .join("AppData")
@@ -291,7 +286,15 @@ fn parse_source(source: &Source, plan: &Plan, prev: &FileEntry) -> FileEntry {
                 Plan::Append { start } => (*start, prev.clone()),
                 _ => (0, FileEntry::default()),
             };
-            parse_lines(source.provider, &source.path, start, &base, false, len, mtime)
+            parse_lines(
+                source.provider,
+                &source.path,
+                start,
+                &base,
+                false,
+                len,
+                mtime,
+            )
         }
     }
 }
@@ -312,19 +315,22 @@ fn parse_lines(
     } else {
         Vec::new()
     };
-    let mut calls = if accumulate || start > 0 { prev.calls } else { 0 };
+    let mut calls = if accumulate || start > 0 {
+        prev.calls
+    } else {
+        0
+    };
     let mut index: HashMap<(String, String), usize> = HashMap::new();
     for (i, b) in buckets.iter().enumerate() {
         index.insert((b.day.clone(), b.model.clone()), i);
     }
 
     let consumed = match for_each_line(path, start, |line| {
-        if let Some(found) = sniff_model(line) {
-            if provider != Provider::Claude || found.contains("claude") || model.is_none() {
-                if provider != Provider::Grok || line.contains("model changed") {
-                    model = Some(found);
-                }
-            }
+        if let Some(found) = sniff_model(line)
+            && (provider != Provider::Claude || found.contains("claude") || model.is_none())
+            && (provider != Provider::Grok || line.contains("model changed"))
+        {
+            model = Some(found);
         }
         let Some(hit) = (match provider {
             Provider::Claude => parse_claude(line),
@@ -370,7 +376,11 @@ fn parse_lines(
         parsed_to: start + consumed,
         model,
         buckets,
-        seen: if accumulate { seen.into_iter().collect() } else { Vec::new() },
+        seen: if accumulate {
+            seen.into_iter().collect()
+        } else {
+            Vec::new()
+        },
         calls,
     }
 }
@@ -512,10 +522,10 @@ fn parse_cursor(path: &Path, len: u64, mtime: i64) -> FileEntry {
         let (key, value) = row;
         let text = String::from_utf8_lossy(&value);
         if let Some(id) = key.strip_prefix("composerData:") {
-            if let Ok(v) = serde_json::from_str::<Value>(&text) {
-                if let Some(day) = v["createdAt"].as_i64().and_then(epoch_day) {
-                    composers.insert(id.to_string(), day);
-                }
+            if let Ok(v) = serde_json::from_str::<Value>(&text)
+                && let Some(day) = v["createdAt"].as_i64().and_then(epoch_day)
+            {
+                composers.insert(id.to_string(), day);
             }
         } else if key.starts_with("bubbleId:") {
             bubbles.push((key, text.into_owned()));
@@ -524,9 +534,15 @@ fn parse_cursor(path: &Path, len: u64, mtime: i64) -> FileEntry {
     let mut index = HashMap::new();
     for (key, text) in bubbles {
         let rest = key.strip_prefix("bubbleId:").unwrap_or("");
-        let Some((cid, _)) = rest.split_once(':') else { continue };
-        let Some(day) = composers.get(cid).copied() else { continue };
-        let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
+        let Some((cid, _)) = rest.split_once(':') else {
+            continue;
+        };
+        let Some(day) = composers.get(cid).copied() else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
         if v["type"].as_i64() != Some(2) {
             continue;
         }
@@ -544,7 +560,14 @@ fn parse_cursor(path: &Path, len: u64, mtime: i64) -> FileEntry {
             output,
             prompt: input,
         };
-        add_bucket(&mut entry.buckets, &mut index, Provider::Cursor, &day, "cursor", parts);
+        add_bucket(
+            &mut entry.buckets,
+            &mut index,
+            Provider::Cursor,
+            &day,
+            "cursor",
+            parts,
+        );
         entry.calls += 1;
     }
     entry
@@ -683,7 +706,10 @@ fn sniff_model(line: &str) -> Option<String> {
             let id = &s[..end];
             if is_model_id(id) {
                 found = Some(id.to_string());
-                if id.contains("claude") || id.contains("gpt") || id.contains("grok") || id.contains("gemini")
+                if id.contains("claude")
+                    || id.contains("gpt")
+                    || id.contains("grok")
+                    || id.contains("gemini")
                 {
                     return Some(id.to_string());
                 }
@@ -720,7 +746,11 @@ fn parse_day(ts: &str) -> Option<NaiveDate> {
 }
 
 fn epoch_day(n: i64) -> Option<NaiveDate> {
-    let ms = if n < 10_000_000_000 { n.saturating_mul(1000) } else { n };
+    let ms = if n < 10_000_000_000 {
+        n.saturating_mul(1000)
+    } else {
+        n
+    };
     DateTime::from_timestamp_millis(ms).map(|d| d.with_timezone(&Local).date_naive())
 }
 
@@ -731,7 +761,9 @@ fn file_day(path: &Path) -> Option<NaiveDate> {
 }
 
 fn file_sig(path: &Path) -> (u64, i64) {
-    let Ok(meta) = path.metadata() else { return (0, 0) };
+    let Ok(meta) = path.metadata() else {
+        return (0, 0);
+    };
     let mtime = meta
         .modified()
         .ok()
@@ -752,7 +784,10 @@ fn fnv(s: &str) -> u64 {
 
 fn open_sqlite(path: &Path) -> Result<rusqlite::Connection, rusqlite::Error> {
     let fwd = path.to_string_lossy().replace('\\', "/");
-    let enc = fwd.replace(' ', "%20").replace('#', "%23").replace('?', "%3F");
+    let enc = fwd
+        .replace(' ', "%20")
+        .replace('#', "%23")
+        .replace('?', "%3F");
     let uri = format!("file:{enc}?mode=ro&nolock=1");
     let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI;
     rusqlite::Connection::open_with_flags(&uri, flags)
@@ -763,7 +798,9 @@ fn load_cache(path: &Path) -> DiskCache {
         rev: RATE_REV,
         files: BTreeMap::new(),
     };
-    let Ok(text) = fs::read_to_string(path) else { return empty };
+    let Ok(text) = fs::read_to_string(path) else {
+        return empty;
+    };
     match serde_json::from_str::<DiskCache>(&text) {
         Ok(cache) if cache.rev == RATE_REV => cache,
         _ => empty,
@@ -771,7 +808,9 @@ fn load_cache(path: &Path) -> DiskCache {
 }
 
 fn save_cache(path: &Path, cache: &DiskCache) {
-    let Ok(text) = serde_json::to_string(cache) else { return };
+    let Ok(text) = serde_json::to_string(cache) else {
+        return;
+    };
     let tmp = path.with_extension("json.tmp");
     if fs::write(&tmp, text).is_ok() {
         let _ = fs::remove_file(path);

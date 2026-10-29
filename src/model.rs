@@ -45,10 +45,6 @@ impl Provider {
         }
     }
 
-    pub fn from_key(key: &str) -> Option<Provider> {
-        Provider::all().into_iter().find(|p| p.key() == key)
-    }
-
     /// Plans courants, en dollars par mois. Le premier est le défaut.
     pub fn presets(self) -> &'static [(&'static str, f64)] {
         match self {
@@ -64,24 +60,12 @@ impl Provider {
         self.presets()[0].1
     }
 
-    pub fn empty_note(self) -> Option<&'static str> {
-        match self {
-            Provider::Agy => {
-                Some("Antigravity ne publie pas les jetons dans ses fichiers locaux.")
-            }
-            Provider::Cursor => Some("Aucun jeton dans la base Cursor."),
-            _ => None,
-        }
-    }
-
     pub fn detail_note(self) -> Option<&'static str> {
         match self {
             Provider::Cursor => {
                 Some("Date = ouverture de la session. Le modèle n’est pas écrit : tarif indicatif.")
             }
-            Provider::Agy => {
-                Some("Antigravity ne publie pas les jetons dans ses fichiers locaux.")
-            }
+            Provider::Agy => Some("Antigravity ne publie pas les jetons dans ses fichiers locaux."),
             _ => None,
         }
     }
@@ -160,7 +144,6 @@ impl Bucket {
 #[derive(Clone, Debug, Default)]
 pub struct Snapshot {
     pub buckets: Vec<Bucket>,
-    pub warnings: Vec<String>,
     pub files: usize,
     pub calls: u64,
 }
@@ -180,10 +163,6 @@ impl Parts {
     pub fn is_empty(self) -> bool {
         self.fresh + self.cache_read + self.write_5m + self.write_1h + self.output == 0
     }
-
-    pub fn tokens(self) -> u64 {
-        self.fresh + self.cache_read + self.write_5m + self.write_1h + self.output
-    }
 }
 
 pub fn period_bounds(
@@ -198,10 +177,7 @@ pub fn period_bounds(
             let day = today.checked_sub_days(Days::new(1)).unwrap_or(today);
             (day, day)
         }
-        Period::Week => (
-            today.checked_sub_days(Days::new(6)).unwrap_or(today),
-            today,
-        ),
+        Period::Week => (today.checked_sub_days(Days::new(6)).unwrap_or(today), today),
         Period::Month => (
             today.checked_sub_days(Days::new(29)).unwrap_or(today),
             today,

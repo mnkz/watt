@@ -164,7 +164,15 @@ fn openai_card(m: &str) -> Card {
     let has = |pat: &str| m.contains(pat);
     // Au-dessus de 272 000 jetons de prompt : input ×2, output ×1,5.
     let long = |input: f64, cached: f64, output: f64| {
-        Card::long(input, cached, output, 272_000, input * 2.0, cached * 2.0, output * 1.5)
+        Card::long(
+            input,
+            cached,
+            output,
+            272_000,
+            input * 2.0,
+            cached * 2.0,
+            output * 1.5,
+        )
     };
     if has("astra") {
         return long(10.0, 1.0, 50.0);
