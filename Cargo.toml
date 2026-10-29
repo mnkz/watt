@@ -1,0 +1,25 @@
+[package]
+name = "watt"
+version = "0.1.0"
+edition = "2024"
+authors = ["mnkz"]
+description = "Compteur de jetons dans la barre des tâches"
+license = "MIT"
+repository = "https://github.com/mnkz/watt"
+readme = "README.md"
+keywords = ["windows", "tray", "tokens", "llm"]
+categories = ["gui"]
+
+[dependencies]
+chrono = { version = "0.4.45", features = ["clock", "std", "serde"] }
+eframe = "0.37.0"
+rayon = "1.12.0"
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tray-icon = "0.26.1"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading"] }
+
+[profile.release]
+codegen-units = 16
+lto = false
