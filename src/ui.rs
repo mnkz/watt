@@ -115,7 +115,7 @@ impl WattApp {
                 .fill(BG);
             if ui
                 .add_sized(Vec2::new(28.0, 22.0), close)
-                .on_hover_text("Réduit dans la barre des tâches")
+                .on_hover_text("Hide to the tray")
                 .clicked()
             {
                 self.hide(ui.ctx());
@@ -159,7 +159,7 @@ impl WattApp {
         let resp = ui.add(
             TextEdit::singleline(text)
                 .desired_width(108.0)
-                .hint_text("AAAA-MM-JJ")
+                .hint_text("YYYY-MM-DD")
                 .font(FontId::new(13.0, FontFamily::Proportional)),
         );
         if !resp.changed() {
@@ -185,7 +185,7 @@ impl WattApp {
         let done = self.shared.progress_done.load(Ordering::Relaxed);
         let total = self.shared.progress_total.load(Ordering::Relaxed).max(1);
         ui.label(
-            RichText::new(format!("Lecture des journaux   {done} / {total}"))
+            RichText::new(format!("Reading journals   {done} / {total}"))
                 .size(11.0)
                 .color(MUTED),
         );
@@ -206,7 +206,7 @@ impl WattApp {
 
     fn cold_scan(&self, ui: &mut egui::Ui) {
         ui.add_space(28.0);
-        ui.label(RichText::new("Lecture des journaux").size(22.0).color(TEXT));
+        ui.label(RichText::new("Reading journals").size(22.0).color(TEXT));
         let done = self.shared.progress_done.load(Ordering::Relaxed);
         let total = self.shared.progress_total.load(Ordering::Relaxed);
         ui.label(
@@ -217,7 +217,7 @@ impl WattApp {
         ui.add_space(8.0);
         ui.label(
             RichText::new(
-                "La première lecture traverse plusieurs Go. Le cache rend les suivantes immédiates.",
+                "The first pass walks several GB. The cache makes the next ones immediate.",
             )
             .size(12.0)
             .color(MUTED),
@@ -239,23 +239,20 @@ impl WattApp {
         };
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
-            ui.label(RichText::new("valeur API").size(12.0).color(MUTED));
+            ui.label(RichText::new("API value").size(12.0).color(MUTED));
             ui.label(RichText::new(api).size(13.0).color(TEXT));
         });
         ui.add_space(8.0);
         let max = view.api_usd.max(view.abo_usd);
         meter(ui, "API", view.api_usd, max, TEXT);
-        meter(ui, "Abo", view.abo_usd, max, MUTED);
+        meter(ui, "Plan", view.abo_usd, max, MUTED);
         ui.add_space(2.0);
         ui.label(RichText::new(ratio_line(view)).size(13.0).color(TEXT));
-        let jour = if view.days > 1 { "jours" } else { "jour" };
+        let day = if view.days == 1 { "day" } else { "days" };
         ui.label(
-            RichText::new(format!(
-                "Abonnements au prorata · {} {jour} / 30",
-                view.days
-            ))
-            .size(11.0)
-            .color(MUTED),
+            RichText::new(format!("Plans, prorated · {} {day} / 30", view.days))
+                .size(11.0)
+                .color(MUTED),
         );
     }
 
@@ -290,14 +287,14 @@ impl WattApp {
                 continue;
             }
             if row.models.is_empty() {
-                note_line(ui, "Aucun jeton sur la période.");
+                note_line(ui, "No tokens in this range.");
             }
             for model in &row.models {
                 let name = model_label(row.provider, &model.model);
                 let money = fmt_money(model.micros as f64 / 1_000_000.0);
                 model_line(ui, &name, &fmt_tokens_full(model.tokens), &money);
                 let detail = format!(
-                    "entrée {}   ·   cache lu {}   ·   cache écrit {}   ·   sortie {}",
+                    "in {}   ·   cache read {}   ·   cache write {}   ·   out {}",
                     fmt_tokens_full(model.input),
                     fmt_tokens_full(model.cache_read),
                     fmt_tokens_full(model.cache_write),
@@ -314,7 +311,7 @@ impl WattApp {
     }
 
     fn subscriptions(&mut self, ui: &mut egui::Ui) {
-        if section_toggle(ui, "Abonnements par mois", self.abos_open) {
+        if section_toggle(ui, "Subscriptions per month", self.abos_open) {
             self.abos_open = !self.abos_open;
         }
         if !self.abos_open {
@@ -327,7 +324,7 @@ impl WattApp {
             return;
         }
         ui.label(
-            RichText::new("Montants saisis par vous, en dollars par mois.")
+            RichText::new("Amounts you set, in dollars per month.")
                 .size(11.0)
                 .color(MUTED),
         );
@@ -365,7 +362,7 @@ impl WattApp {
 
     fn footer(&mut self, ui: &mut egui::Ui, scanning: bool) {
         ui.label(
-            RichText::new(format!("tarifs publics · {RATE_LABEL}"))
+            RichText::new(format!("public rates · {RATE_LABEL}"))
                 .size(11.0)
                 .color(MUTED),
         );
@@ -376,12 +373,12 @@ impl WattApp {
                 None => "—".to_string(),
             };
             let state = if scanning {
-                "lecture en cours".to_string()
+                "reading".to_string()
             } else {
-                format!("lu à {when} · toutes les 60 s")
+                format!("read at {when} · every 60 s")
             };
             ui.label(RichText::new(state).size(11.0).color(MUTED));
-            if !scanning && text_button(ui, "actualiser") {
+            if !scanning && text_button(ui, "refresh") {
                 self.refresh();
             }
         });
@@ -463,7 +460,7 @@ fn idx(provider: Provider) -> usize {
 
 fn model_label(provider: Provider, model: &str) -> String {
     if provider == Provider::Cursor {
-        "tarif indicatif".to_string()
+        "indicative rate".to_string()
     } else {
         model.to_string()
     }
@@ -471,10 +468,10 @@ fn model_label(provider: Provider, model: &str) -> String {
 
 fn ratio_line(view: &PeriodView) -> String {
     if view.abo_usd <= 0.0 {
-        return "Abonnement à 0 $.".to_string();
+        return "Plan is $0.".to_string();
     }
     let ratio = view.api_usd / view.abo_usd;
-    format!("{}× l’abonnement", fmt_ratio(ratio))
+    format!("{}× the plan", fmt_ratio(ratio))
 }
 
 fn chip(ui: &mut egui::Ui, label: &str, on: bool) -> bool {
@@ -597,7 +594,7 @@ fn meter(ui: &mut egui::Ui, label: &str, value: f64, max: f64, color: Color32) {
         TEXT,
     );
     let bar = Rect::from_min_max(
-        Pos2::new(rect.left() + 36.0, rect.center().y - 1.0),
+        Pos2::new(rect.left() + 42.0, rect.center().y - 1.0),
         Pos2::new(money_x - 12.0, rect.center().y + 1.0),
     );
     if bar.width() > 2.0 {
@@ -627,7 +624,7 @@ fn hairline(ui: &mut egui::Ui) {
 
 pub fn fmt_tokens_short(n: u64) -> String {
     if n >= 1_000_000_000 {
-        format!("{} Md", one_decimal(n as f64 / 1_000_000_000.0))
+        format!("{} B", one_decimal(n as f64 / 1_000_000_000.0))
     } else if n >= 1_000_000 {
         format!("{} M", one_decimal(n as f64 / 1_000_000.0))
     } else if n >= 1_000 {
@@ -648,20 +645,20 @@ pub fn fmt_money(usd: f64) -> String {
     let neg = usd < 0.0;
     let text = format!("{:.2}", usd.abs());
     let (int, frac) = text.split_once('.').unwrap_or((text.as_str(), "00"));
-    let body = format!("{},{frac} $", group_int(int));
+    let body = format!("${}.{}", group_int(int), frac);
     if neg { format!("−{body}") } else { body }
 }
 
 fn fmt_ratio(ratio: f64) -> String {
     if ratio >= 10.0 {
-        format!("{:.0}", ratio).replace('.', ",")
+        format!("{:.0}", ratio)
     } else {
-        format!("{ratio:.1}").replace('.', ",")
+        format!("{ratio:.1}")
     }
 }
 
 fn one_decimal(v: f64) -> String {
-    format!("{v:.1}").replace('.', ",")
+    format!("{v:.1}")
 }
 
 fn group_int(int: &str) -> String {
@@ -669,7 +666,7 @@ fn group_int(int: &str) -> String {
     let mut out = String::new();
     for (i, c) in chars.iter().enumerate() {
         if i > 0 && (chars.len() - i).is_multiple_of(3) {
-            out.push('\u{202f}');
+            out.push(',');
         }
         out.push(*c);
     }
@@ -696,10 +693,10 @@ mod tests {
 
     #[test]
     fn money_and_tokens() {
-        assert_eq!(fmt_money(1234.5), "1\u{202f}234,50 $");
-        assert_eq!(fmt_money(0.0), "0,00 $");
-        assert_eq!(fmt_tokens_short(1_240_000), "1,2 M");
-        assert_eq!(fmt_tokens_short(12_400), "12,4 k");
-        assert_eq!(fmt_tokens_full(5186044), "5\u{202f}186\u{202f}044");
+        assert_eq!(fmt_money(1234.5), "$1,234.50");
+        assert_eq!(fmt_money(0.0), "$0.00");
+        assert_eq!(fmt_tokens_short(1_240_000), "1.2 M");
+        assert_eq!(fmt_tokens_short(12_400), "12.4 k");
+        assert_eq!(fmt_tokens_full(5186044), "5,186,044");
     }
 }

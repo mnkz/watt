@@ -128,7 +128,7 @@ pub fn run_scan(shared: &Shared) {
                 let entry = parse_source(source, plan, prev);
                 let n = done.fetch_add(1, Ordering::Relaxed);
                 if n.is_multiple_of(250) {
-                    scan_log(&format!("progression {n}"));
+                    scan_log(&format!("progress {n}"));
                 }
                 (source.path.to_string_lossy().to_string(), entry)
             })
@@ -344,7 +344,7 @@ fn parse_lines(
             .model
             .clone()
             .or_else(|| model.clone())
-            .unwrap_or_else(|| "inconnu".to_string());
+            .unwrap_or_else(|| "unknown".to_string());
         let day = hit
             .day
             .or_else(|| file_day(path))
@@ -432,7 +432,7 @@ fn parse_codex(line: &str) -> Option<Hit> {
     if v["type"].as_str() != Some("token_usage_record") {
         return None;
     }
-    // `usage` est l’appel. `thread_token_usage` est le cumul : on ne le compte pas.
+    // `usage` is this call. `thread_token_usage` is the running total: skip it.
     let u = &v["payload"]["usage"];
     let input = num(&u["input_tokens"]);
     let cached = num(&u["cached_input_tokens"]).min(input);

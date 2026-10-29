@@ -1,8 +1,8 @@
 use crate::model::Parts;
 
-/// Tarifs API publics au 29 octobre 2026, en dollars par million de jetons.
-/// Les écritures de cache Claude suivent la carte Anthropic (5 min / 1 h).
-/// Au-delà du palier long contexte, input et output passent au tarif long.
+/// Public API rates as of October 29, 2026, in dollars per million tokens.
+/// Claude cache writes follow the Anthropic card (5 min / 1 h).
+/// Past the long-context tier, input and output use the long rate.
 #[derive(Clone, Copy)]
 struct Card {
     input: f64,
@@ -14,7 +14,7 @@ struct Card {
     long_input: f64,
     long_cached: f64,
     long_output: f64,
-    /// OpenAI ne facture pas l’écriture de cache à part : on la compte au prix de l’input.
+    /// OpenAI does not bill cache writes separately: they are priced as input.
     write_like_input: bool,
 }
 
@@ -162,7 +162,7 @@ fn claude_card(m: &str) -> Card {
 
 fn openai_card(m: &str) -> Card {
     let has = |pat: &str| m.contains(pat);
-    // Au-dessus de 272 000 jetons de prompt : input ×2, output ×1,5.
+    // Above 272,000 prompt tokens: input ×2, output ×1.5.
     let long = |input: f64, cached: f64, output: f64| {
         Card::long(
             input,
@@ -218,14 +218,14 @@ fn grok_card(m: &str) -> Card {
     if has("4.3") || has("4-3") {
         return Card::long(1.25, 0.20, 2.50, 200_000, 2.50, 0.40, 5.0);
     }
-    // Grok 4.5 / 4.6 / 4.7 : 2 / 0,50 / 6, doublé au-delà de 200 000.
+    // Grok 4.5 / 4.6 / 4.7: 2 / 0.50 / 6, doubled past 200,000.
     Card::long(2.0, 0.50, 6.0, 200_000, 4.0, 1.0, 12.0)
 }
 
 fn gemini_card(m: &str) -> Card {
     let has = |pat: &str| m.contains(pat);
     if has("argon") || has("gemini-4") {
-        // Tarif d’introduction jusqu’au 30 novembre 2026.
+        // Introductory rate through November 30, 2026.
         return Card::flat(2.0, 0.10, 10.0);
     }
     if has("3.1") && has("pro") || has("3-pro") {

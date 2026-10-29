@@ -2,7 +2,7 @@ use chrono::{Datelike, Days, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 pub const RATE_REV: u32 = 1;
-pub const RATE_LABEL: &str = "29 oct. 2026";
+pub const RATE_LABEL: &str = "Oct 29, 2026";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -45,13 +45,13 @@ impl Provider {
         }
     }
 
-    /// Plans courants, en dollars par mois. Le premier est le défaut.
+    /// Current plans, in dollars per month. The first one is the default.
     pub fn presets(self) -> &'static [(&'static str, f64)] {
         match self {
             Provider::Claude => &[("Pro 20", 20.0), ("Max 100", 100.0), ("Max 200", 200.0)],
             Provider::Codex => &[("Plus 20", 20.0), ("Pro 100", 100.0), ("Pro 200", 200.0)],
             Provider::Grok => &[("Plus 8", 8.0), ("Premium 30", 30.0), ("Super 100", 100.0)],
-            Provider::Agy => &[("Offert", 0.0), ("AI Pro 20", 20.0), ("Ultra 100", 100.0)],
+            Provider::Agy => &[("Free", 0.0), ("AI Pro 20", 20.0), ("Ultra 100", 100.0)],
             Provider::Cursor => &[("Pro 20", 20.0), ("Pro+ 60", 60.0), ("Ultra 200", 200.0)],
         }
     }
@@ -63,9 +63,9 @@ impl Provider {
     pub fn detail_note(self) -> Option<&'static str> {
         match self {
             Provider::Cursor => {
-                Some("Date = ouverture de la session. Le modèle n’est pas écrit : tarif indicatif.")
+                Some("Date is the session start. The model is not recorded: indicative rate.")
             }
-            Provider::Agy => Some("Antigravity ne publie pas les jetons dans ses fichiers locaux."),
+            Provider::Agy => Some("Antigravity does not publish tokens in its local files."),
             _ => None,
         }
     }
@@ -93,11 +93,11 @@ impl Period {
 
     pub fn label(self) -> &'static str {
         match self {
-            Period::Today => "Aujourd’hui",
-            Period::Yesterday => "Hier",
-            Period::Week => "7 jours",
-            Period::Month => "30 jours",
-            Period::Custom => "Dates",
+            Period::Today => "Today",
+            Period::Yesterday => "Yesterday",
+            Period::Week => "7 days",
+            Period::Month => "30 days",
+            Period::Custom => "Range",
         }
     }
 
@@ -155,7 +155,7 @@ pub struct Parts {
     pub write_5m: u64,
     pub write_1h: u64,
     pub output: u64,
-    /// Taille du prompt, pour le palier long contexte.
+    /// Prompt size, for the long-context tier.
     pub prompt: u64,
 }
 
@@ -202,10 +202,9 @@ pub fn month_start(today: NaiveDate) -> NaiveDate {
 
 pub fn fmt_day(day: NaiveDate) -> String {
     const MONTHS: [&str; 12] = [
-        "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.",
-        "déc.",
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
-    format!("{} {}", day.day(), MONTHS[day.month0() as usize])
+    format!("{} {}", MONTHS[day.month0() as usize], day.day())
 }
 
 pub fn fmt_span(start: NaiveDate, end: NaiveDate) -> String {

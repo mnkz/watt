@@ -28,7 +28,7 @@ static MUTEX: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut())
 
 fn main() {
     if !claim_instance() {
-        message_box("Watt", "Watt est déjà dans la barre des tâches.");
+        message_box("Watt", "Watt is already in the tray.");
         return;
     }
     std::panic::set_hook(Box::new(|info| {
@@ -41,9 +41,9 @@ fn main() {
         Box::new(|cc| Ok(Box::new(WattApp::new(cc)))),
     );
     match err {
-        Ok(()) => log_line("fenêtre fermée"),
+        Ok(()) => log_line("window closed"),
         Err(err) => {
-            let msg = format!("Watt n’a pas pu démarrer.\n{err}");
+            let msg = format!("Watt could not start.\n{err}");
             log_line(&msg);
             message_box("Watt", &msg);
         }
@@ -328,7 +328,7 @@ fn spawn_scan(shared: Arc<Shared>, wake: Arc<Wake>, ctx: egui::Context) {
             loop {
                 shared.scanning.store(true, Ordering::Relaxed);
                 ctx.request_repaint();
-                log_line("lecture démarrée");
+                log_line("scan started");
                 let job = Arc::clone(&shared);
                 let result = std::panic::catch_unwind(AssertUnwindSafe(move || {
                     scan::run_scan(&job);
@@ -338,11 +338,11 @@ fn spawn_scan(shared: Arc<Shared>, wake: Arc<Wake>, ctx: egui::Context) {
                 } else {
                     let summary = shared.snapshot.lock().map(|snap| {
                         format!(
-                            "lecture terminée · {} fichiers · {} appels",
+                            "scan finished · {} files · {} calls",
                             snap.files, snap.calls
                         )
                     });
-                    log_line(&summary.unwrap_or_else(|_| "lecture terminée".to_string()));
+                    log_line(&summary.unwrap_or_else(|_| "scan finished".to_string()));
                 }
                 shared.scanning.store(false, Ordering::Relaxed);
                 ctx.request_repaint();
@@ -385,11 +385,11 @@ fn install_tray(tx: Sender<Cmd>, ctx: egui::Context) -> Option<TrayIcon> {
         ctx.request_repaint();
     }));
 
-    let open = Box::leak(Box::new(MenuItem::with_id("open", "Ouvrir", true, None)));
-    let quit = Box::leak(Box::new(MenuItem::with_id("quit", "Quitter", true, None)));
+    let open = Box::leak(Box::new(MenuItem::with_id("open", "Open", true, None)));
+    let quit = Box::leak(Box::new(MenuItem::with_id("quit", "Quit", true, None)));
     let menu = Menu::new();
     if menu.append(open).is_err() || menu.append(quit).is_err() {
-        log_line("menu de la barre des tâches indisponible");
+        log_line("tray menu unavailable");
     }
     let icon = tray_icon::Icon::from_rgba(watt_mark(32), 32, 32).ok()?;
     match TrayIconBuilder::new()
@@ -401,7 +401,7 @@ fn install_tray(tx: Sender<Cmd>, ctx: egui::Context) -> Option<TrayIcon> {
     {
         Ok(tray) => Some(tray),
         Err(err) => {
-            log_line(&format!("icône : {err}"));
+            log_line(&format!("icon: {err}"));
             None
         }
     }
@@ -626,7 +626,7 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
     } else if let Some(text) = payload.downcast_ref::<String>() {
         text.clone()
     } else {
-        "inconnu".to_string()
+        "unknown".to_string()
     }
 }
 
@@ -700,7 +700,7 @@ impl Config {
     }
 }
 
-/// Grok démarre sur Premium. Les autres prennent le premier palier. Tout est éditable.
+/// Grok starts on Premium. The others take the first tier. All of it is editable.
 fn default_abo(provider: Provider) -> f64 {
     match provider {
         Provider::Grok => 30.0,
